@@ -20,11 +20,22 @@ typedef struct {
     size_t len, cap;
 } sbuf;
 
+// keyword lookup table
+typedef struct { const char *kw; TokenType ty; } kw_entry;
+
+// list of keywords
+const kw_entry KW[] = {
+    {"char", CHAR},{"int", INT}, {"float", FLOAT}, {"double", DOUBLE},
+    {"if", IF},{"else", ELSE}, {"while", WHILE}, {"do", DO}, {"for", FOR},
+    {"return", RETURN}, {"break", BREAK}, {"continue", CONTINUE}, {"goto", GOTO} 
+};
+
 // function prototypes
 int next_char(void); // get next character, updating line/column
 void push_char(int c); // push back a character
 int peek_char(void); // peek at next character without consuming
 void skip_spaces_and_comments(void); // skip whitespace and comments
+int decode_escape_sequence(int c); // decode an escape sequence, given the char after '\'
 void scanner_error(const char *msg, int offending); // report a scanner error
 int is_ident_start(int c) { return isalpha(c) || c == '_'; } // whether c can start an identifier
 int is_ident_part(int c) { return isalnum(c) || c == '_'; }  // whether c can be part of an identifier
@@ -168,15 +179,26 @@ void skip_spaces_and_comments(void) {
     }
 }
 
-// keyword lookup table
-typedef struct { const char *kw; TokenType ty; } kw_entry;
+int decode_escape_sequence(int c) {
+    switch (c) {
+        case 'n': return '\n';
+        case 't': return '\t';
+        case 'r': return '\r';
+        case 'v': return '\v';
+        case 'f': return '\f';
+        case 'a': return '\a';
+        case 'b': return '\b';
+        case '\\': return '\\';
+        case '\'': return '\'';
+        case '"': return '\"';
+        case '?': return '\?'; 
+        case '0': return '\0'; // null character
+        default:
+            scanner_error("invalid escape sequence", c);
+            return c; // never reached
+    }
+}
 
-// list of keywords
-const kw_entry KW[] = {
-    {"char", CHAR},{"int", INT}, {"float", FLOAT}, {"double", DOUBLE},
-    {"if", IF},{"else", ELSE}, {"while", WHILE}, {"do", DO}, {"for", FOR},
-    {"return", RETURN}, {"break", BREAK}, {"continue", CONTINUE}, {"goto", GOTO} 
-};
 
 // lookup a keyword; returns NULL_TOKEN if not found
 TokenType keyword_lookup(const char *s) {
@@ -304,12 +326,11 @@ Token scan_string(void) {
 
         if (c == '\\') {
             // keep backslash and the next char verbatim (if any)
-            sbuf_push(&b, '\\');
             int d = next_char();
             if (d == EOF || d == '\n') {
                 scanner_error("unterminated string literal after backslash", d);
             }
-            sbuf_push(&b, (char)d);
+            sbuf_push(&b, (char)decode_escape_sequence(d));
             continue;
         }
 
