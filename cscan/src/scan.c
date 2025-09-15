@@ -1,3 +1,18 @@
+/* 
+Sources / Tools I used during programming
+
+1. I used github copilot to help me write some parts of the code. 
+    For example, I used it to help me write the functions for the string buffer (sbuf) 
+    and some parts of the scan_string function. I made sure to review and understand the code it generated. 
+2. I used ChatGPT “Study Mode” for learning/explanations while I wrote the code.
+3. I used google search to find documentation on C programming.
+
+*/
+
+
+
+
+
 #include "scan.h" 
 #include <ctype.h> // isspace, isalpha, isalnum, isdigit
 
@@ -310,10 +325,10 @@ Token scan_number(int first_char) {
 
 // scan a string literal (called after the opening '"' has been consumed)
 Token scan_string(void) {
-    // we are called after the opening '"' has already been consumed
+    // sbuf for building the string contents
     sbuf b; sbuf_init(&b);
 
-    for (;;) {
+    for (;;) { // infinite loop, breaks on closing quote or error
         int c = next_char();
         if (c == EOF || c == '\n') {
             scanner_error("unterminated string literal", c);
@@ -327,12 +342,32 @@ Token scan_string(void) {
         if (c == '\\') {
             // keep backslash and the next char verbatim (if any)
             int d = next_char();
-            if (d == EOF || d == '\n') {
-                scanner_error("unterminated string literal after backslash", d);
-            }
-            sbuf_push(&b, (char)decode_escape_sequence(d));
+        if (d == EOF) {
+            scanner_error("unterminated string literal after backslash", d);
+        }
+
+        // Line continuation: backslash immediately followed by newline
+        if (d == '\n') {
+            // swallow the newline (continue the string on next line)
             continue;
         }
+
+        // Windows CRLF support for continuation: "\\\r\n"
+        if (d == '\r') {
+            int e = peek_char();
+            if (e == '\n') { (void)next_char(); continue; } // swallow \r\n
+            scanner_error("backslash must be immediately before newline in continued string", d);
+        }
+
+        // If there is whitespace after backslash that is not a newline -> error
+        if (d == ' ' || d == '\t' || d == '\v' || d == '\f') {
+            scanner_error("whitespace after backslash before newline in string literal", d);
+        }
+
+        // Normal escape sequence: decode and append single char
+        sbuf_push(&b, (char)decode_escape_sequence(d));
+        continue;
+    }
 
         // regular character
         sbuf_push(&b, (char)c);
